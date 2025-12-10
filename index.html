@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>RadarAI — Power Law Radar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      color: #e5e7eb;
+      background:
+        radial-gradient(circle at 20% 20%, #1a1f2e, #0a0e17 60%),
+        radial-gradient(circle at 80% 80%, #101522, #000 70%);
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body.light-theme {
+      background: #f3f4f6;
+      color: #1f2937;
+    }
+
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 32px 36px 40px;
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(8px);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.05),
+        0 25px 60px rgba(0,0,0,0.55),
+        0 0 80px rgba(0,180,255,0.12);
+      transition: all 0.35s ease;
+    }
+
+    body.light-theme .container {
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 25px 60px rgba(0,0,0,0.12);
+    }
+
+    .logo-banner {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+
+    #radar-logo {
+      width: 320px;
+      height: auto;
+      filter: drop-shadow(0px 0px 12px rgba(0,255,255,0.18));
+    }
+
+    .radar-desc {
+      text-align: center;
+      max-width: 620px;
+      margin: 10px auto 24px;
+      font-size: 15px;
+      color: #9ca3af;
+    }
+    body.light-theme .radar-desc { color: #4b5563; }
+
+    .control-row {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    select {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 15px;
+      background: #0d121f;
+      color: #0ff7ff;
+      border: 1px solid #1f2937;
+    }
+    body.light-theme select {
+      background: #ffffff;
+      color: #111827;
+      border-color: #cccccc;
+    }
+
+    button {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: 1px solid #1f2937;
+      background: #0d121f;
+      color: #e5e7eb;
+      cursor: pointer;
+      transition: 0.25s;
+    }
+    button:hover { background: #1b2335; }
+    body.light-theme button {
+      background: #e5e7eb;
+      color: #111827;
+      border-color: #999999;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 520px;
+      margin-bottom: 10px;
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.02);
+      box-shadow: inset 0 0 40px rgba(0,0,0,0.4);
+    }
+
+    #status {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 14px;
+      color: #8b95a5;
+    }
+    #status.ok { color: #4ade80; }
+
+    #radarChart {
+      margin-top: 25px;
+      width: 100%;
+      max-width: 600px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    #radar-info {
+      background: rgba(25,35,55,0.6);
+      padding: 16px;
+      margin: 10px auto 20px;
+      border-radius: 12px;
+      max-width: 750px;
+      border: 1px solid rgba(255,255,255,0.08);
+      line-height: 1.55;
+    }
+    body.light-theme #radar-info {
+      background: rgba(240,240,240,0.85);
+      border-color: #cccccc;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 22px;
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 8px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    th {
+      background: rgba(255,255,255,0.04);
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+    body.light-theme th {
+      background:#e5e7eb;
+      color:#111827;
+    }
+    body.light-theme td {
+      border-bottom:1px solid #dddddd;
+    }
+
+    .dev-very-cheap{ color:#00ff95; font-weight:600; }
+    .dev-cheap{ color:#4ade80; }
+    .dev-neutral{ color:#cbd5e1; }
+    .dev-expensive{ color:#f97316; }
+    .dev-very-expensive{ color:#ef4444; font-weight:600; }
+
+    .zone-panic{ color:#22c55e; }
+    .zone-cheap{ color:#a3e635; }
+    .zone-neutral{ color:#cbd5e1; }
+    .zone-hot{ color:#f97316; }
+    .zone-euforia{ color:#ef4444; }
+
+    .gauge-box {
+      max-width: 360px;
+      margin: 20px auto 0;
+      padding: 26px 24px 30px;
+      border-radius: 20px;
+      background: linear-gradient(145deg, #0f172a, #1e293b);
+      border: 1px solid rgba(148,163,184,0.22);
+      box-shadow:
+        0 6px 18px rgba(0,0,0,0.45),
+        0 0 35px rgba(0,200,255,0.10);
+      text-align: center;
+      transition: .35s;
+    }
+    body.light-theme .gauge-box {
+      background: radial-gradient(circle at top, #ffffff, #e5e7eb);
+      border-color: #cbd5e1;
+      box-shadow: 0 12px 30px rgba(15,23,42,0.12);
+    }
+
+    #gauge-score-number {
+      font-size: 54px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-shadow: 0 0 14px rgba(0,0,0,0.4);
+      margin-bottom: 6px;
+    }
+    #gauge-score-label {
+      font-size: 15px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #9ca3af;
+    }
+
+    #most-undervalued {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #22c55e;
+    }
+
+    .section-title {
+      text-align: center;
+      margin-top: 36px;
+      margin-bottom: 8px;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .small-muted {
+      font-size: 13px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 4px;
+    }
+    body.light-theme .small-muted { color:#6b7280; }
+
+    @media (max-width: 750px) {
+      body { padding: 10px; }
+      .container { padding: 18px; }
+      #radar-logo { width: 240px; }
+      .chart-wrapper { height: 380px; }
+      table { font-size: 12px; }
+      td, th { padding: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="logo-banner">
+      <!-- usa il tuo file logo locale -->
+      <img id="radar-logo" src="radarai-logo.png" alt="RadarAI Logo">
+    </div>
+
+    <p class="radar-desc">
+      RadarAI — analisi ciclica basata su Power Law, deviazioni standard e z-score.
+      Strumento educativo, non costituisce consulenza finanziaria.
+    </p>
+
+    <div class="control-row">
+      <select id="coin-select" onchange="changeCoin()">
+        <option value="BTC">BTC</option>
+        <option value="ETH">ETH</option>
+        <option value="SOL">SOL</option>
+        <option value="XRP">XRP</option>
+        <option value="DOGE">DOGE</option>
+      </select>
+      &nbsp;&nbsp;
+      <button id="theme-toggle" onclick="toggleTheme()">Tema: Dark</button>
+    </div>
+
+    <div class="chart-wrapper">
+      <canvas id="plChart"></canvas>
+    </div>
+    <div id="status">Caricamento storico 1D...</div>
+
+<div id="bubble-indicator"
+     class="bubble"
+     style="display:block; margin: 0 auto 10px auto; text-align:center;">
+</div>
+
+<div id="mini-analysis"
+     style="text-align:center; margin-top:6px; margin-bottom:12px; font-size:14px; color:#cbd5e1;">
+</div>
+
+	<h2 class="section-title" style="margin-top:32px;">Radar Attuale</h2>
+    <canvas id="radarChart"></canvas>
+
+    <div style="text-align:center; margin-top:10px;">
+      <button onclick="toggleRadarInfo()">Come leggere il Radar</button>
+    </div>
+
+    <div id="radar-info" style="display:none;">
+      <b>Come leggere il Radar:</b><br><br>
+      • <b>Dev%</b>: quanto il prezzo è sopra/sotto il Fair Value della Power Law.<br>
+      • <b>Z-score</b>: distanza in deviazioni standard dalla curva PL (log-price).<br>
+      • <b>Opportunità</b>: punteggio sintetico 0–100 che combina Dev% e Z.<br>
+      • <b>Ciclo</b>: quanto siamo avanti nel ciclo (zone di panic / euforia).<br>
+      • <b>Valutazione</b>: quanto l’asset è caro o economico rispetto alla sua storia.<br><br>
+      Valori alti su Opportunità + Dev% molto negativi + Z-score sotto zero
+      indicano aree statisticamente interessanti (ma sempre rischiose).
+    </div>
+
+<!-- === RISK / OPPORTUNITY BAR === -->
+<div id="risk-bar-wrapper" style="
+    width:100%;
+    max-width:680px;
+    margin:40px auto 10px auto;
+    padding:0 20px;
+">
+    <div style="display:flex; justify-content:space-between; color:#e5e7eb; font-size:14px; margin-bottom:6px;">
+        <span>Rischio</span>
+        <span>Opportunità</span>
+    </div>
+
+    <div id="risk-bar-bg" style="
+        width:100%;
+        height:12px;
+        background:linear-gradient(90deg, #ef4444, #eab308, #22c55e);
+        border-radius:8px;
+        position:relative;
+        opacity:0.75;
+    ">
+        <div id="risk-bar-pointer" style="
+            width:14px;
+            height:14px;
+            background:#fff;
+            border-radius:50%;
+            position:absolute;
+            top:-1px;
+            left:50%;
+            transform:translateX(-50%);
+            transition:left 0.4s ease;
+            box-shadow:0 0 6px rgba(255,255,255,0.6);
+        "></div>
+    </div>
+</div>
+
+    <h2 class="section-title">Radar(tabella)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Coin</th>
+          <th>Prezzo</th>
+          <th>Fair Value</th>
+          <th>Dev%</th>
+          <th>Z</th>
+          <th>Zona</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+
+    <div id="most-undervalued"></div>
+
+    <h2 class="section-title" id="gauge-title">
+      Rischio / Opportunità — BTC
+    </h2>
+
+    <div class="gauge-box">
+      <div id="gauge-score-number">-</div>
+      <div id="gauge-score-label">In attesa dati…</div>
+    </div>
+
+    <h2 class="section-title" style="margin-top:40px;">
+      Target Futuri (Power Law)
+    </h2>
+
+    <div class="small-muted">
+      Stima statistica 2025–2030 basata sui modelli PL storici
+      (non è una previsione certa).
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Coin</th>
+          <th>Anno</th>
+          <th>-2σ</th>
+          <th>-1σ</th>
+          <th>PL</th>
+          <th>+1σ</th>
+          <th>+2σ</th>
+        </tr>
+      </thead>
+      <tbody id="targets-body"></tbody>
+    </table>
+
+    <script>
+// === MODELLI & COSTANTI ===
+
+const coins = ["BTC","ETH","SOL","XRP","DOGE"];
+
+const models = {
+  BTC:{ a:2.2084072563,  c:3.955468251e-4,   sigma:0.3930700963,  start:new Date("2010-07-17") },
+  ETH:{ a:2.292193,      c:0.0000245318,     sigma:0.31298,       start:new Date("2015-08-07") },
+  SOL:{ a:1.4392,        c:0.0028023,        sigma:0.3922639819,  start:new Date("2020-04-11") },
+  XRP:{ a:2.0664470289,  c:2.9851825743e-8,  sigma:0.4915730923,  start:new Date("2013-12-20") },
+  DOGE:{a:2.8078070664,  c:5.3181165313e-12, sigma:0.6327934801,  start:new Date("2013-12-15") }
+};
+
+const BINANCE = {
+  BTC:"BTCUSDT",
+  ETH:"ETHUSDT",
+  SOL:"SOLUSDT",
+  XRP:"XRPUSDT",
+  DOGE:"DOGEUSDT"
+};
+
+const years = [2025,2026,2027,2028,2029,2030];
+
+let fullHistory = {};
+let latestPrices = {};
+let chart = null;
+let radarChart = null;
+let currentCoin = "BTC";
+let currentTheme = "dark";
+let radarRealValues = [0, 0, 0, 0, 0];
+
+// === UTILITY ===
+
+function daysBetween(a,b){ return Math.max(1, Math.floor((b - a)/(1000*3600*24))); }
+function fmt(v,d){ return (!isFinite(v)) ? "-" : v.toFixed(d); }
+
+function devClass(d){
+  if(d < -40) return "dev-very-cheap";
+  if(d < -15) return "dev-cheap";
+  if(d <  10) return "dev-neutral";
+  if(d <  35) return "dev-expensive";
+  return "dev-very-expensive";
+}
+
+function zona(z){
+  if(z < -2) return {t:"Panic",  c:"zone-panic"};
+  if(z < -1) return {t:"Cheap",  c:"zone-cheap"};
+  if(z <  1) return {t:"Neutro", c:"zone-neutral"};
+  if(z <  2) return {t:"Hot",    c:"zone-hot"};
+  return {t:"Euforia", c:"zone-euforia"};
+}
+
+function hexToRgba(hex, alpha){
+  const h = hex.replace('#','');
+  if(h.length !== 6) return hex;
+  const r = parseInt(h.slice(0,2),16);
+  const g = parseInt(h.slice(2,4),16);
+  const b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// === THEME ===
+
+function applyTheme(theme){
+  const isLight = theme === "light";
+  currentTheme = theme;
+
+  document.body.classList.toggle("light-theme", isLight);
+
+  if(chart){
+    const tick = isLight ? "#1f2937" : "#cbd5e1";
+    const gridY= isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.07)";
+    const gridX= isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
+    chart.options.scales.x.ticks.color = tick;
+    chart.options.scales.y.ticks.color = tick;
+    chart.options.scales.x.grid.color  = gridX;
+    chart.options.scales.y.grid.color  = gridY;
+    chart.update();
+  }
+
+  if(radarChart){
+    radarChart.options.scales.r.pointLabels.color = isLight ? "#111827" : "#e5e7eb";
+    radarChart.options.scales.r.grid.color        = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)";
+    radarChart.options.scales.r.angleLines.color  = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.14)";
+    radarChart.update();
+  }
+
+  const btn = document.getElementById("theme-toggle");
+  if(btn) btn.textContent = isLight ? "Tema: Light" : "Tema: Dark";
+}
+
+function toggleTheme(){
+  currentTheme = (currentTheme === "dark") ? "light" : "dark";
+  applyTheme(currentTheme);
+}
+
+function toggleRadarInfo(){
+  const box = document.getElementById("radar-info");
+  box.style.display =
+    (box.style.display === "none" || box.style.display === "") ? "block" : "none";
+}
+// === POWER LAW CHART ===
+
+function computePLHistory(sym){
+  const m = models[sym];
+  const start = m.start;
+  const series = fullHistory[sym] || [];
+
+  let pl=[],plus1=[],plus2=[],minus1=[],minus2=[];
+  series.forEach(pt=>{
+    let t = daysBetween(start, new Date(pt.time));
+    if(t < 1) t = 1;
+    const fv = m.c * Math.pow(t, m.a);
+    const logFV = Math.log(fv)/Math.LN10;
+    pl.push(fv);
+    plus1.push(Math.pow(10, logFV + m.sigma));
+    plus2.push(Math.pow(10, logFV + 2*m.sigma));
+    minus1.push(Math.pow(10, logFV - m.sigma));
+    minus2.push(Math.pow(10, logFV - 2*m.sigma));
+  });
+  return {pl,plus1,plus2,minus1,minus2};
+}
+
+function createChart() {
+  const ctx = document.getElementById("plChart").getContext("2d");
+
+  chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        // 0) Prezzo
+        {
+          label: "Prezzo",
+          data: [],
+          borderColor: "#22d3ee",         // azzurro
+          backgroundColor: "rgba(34,211,238,0.05)",
+          borderWidth: 1.7,
+          pointRadius: 0,
+          tension: 0.1
+        },
+        // 1) Power Law
+        {
+          label: "Power Law",
+          data: [],
+          borderColor: "#facc15",         // giallo
+          backgroundColor: "rgba(250,204,21,0.05)",
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.15
+        },
+        // 2) Area sopra PL (verde)
+        {
+          label: "Area sopra PL",
+          data: [],                       // verrà riempito in updateChart()
+          borderColor: "rgba(34,197,94,0)",
+          backgroundColor: "rgba(34,197,94,0.25)", // verde
+          pointRadius: 0,
+          tension: 0.1,
+          fill: { target: 1 }             // fill verso dataset index 1 (Power Law)
+        },
+        // 3) Area sotto PL (rosso)
+        {
+          label: "Area sotto PL",
+          data: [],                       // verrà riempito in updateChart()
+          borderColor: "rgba(248,113,113,0)",
+          backgroundColor: "rgba(248,113,113,0.30)", // rosso
+          pointRadius: 0,
+          tension: 0.1,
+          fill: { target: 1 }             // fill verso la Power Law
+        },
+        // 4) +1σ
+        {
+          label: "+1σ",
+          data: [],
+          borderColor: "#f97316",         // arancione
+          borderWidth: 1.2,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          tension: 0.12
+        },
+        // 5) +2σ
+        {
+          label: "+2σ",
+          data: [],
+          borderColor: "#ef4444",         // rosso
+          borderWidth: 1.2,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          tension: 0.12
+        },
+        // 6) -1σ
+        {
+          label: "-1σ",
+          data: [],
+          borderColor: "#22c55e",         // verde chiaro
+          borderWidth: 1.2,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          tension: 0.12
+        },
+        // 7) -2σ
+        {
+          label: "-2σ",
+          data: [],
+          borderColor: "#16a34a",         // verde più scuro
+          borderWidth: 1.2,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          tension: 0.12
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "nearest", intersect: false },
+      scales: {
+        y: {
+          type: "logarithmic",
+          ticks: {
+            color: "#cbd5e1"
+          },
+          grid: {
+            color: "rgba(255,255,255,0.07)"
+          }
+        },
+        x: {
+          ticks: {
+            color: "#cbd5e1"
+          },
+          grid: {
+            color: "rgba(255,255,255,0.05)"
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: "#e5e7eb"
+          }
+        },
+        tooltip: {
+          enabled: true,
+          backgroundColor: "rgba(0,0,0,0.8)",
+          borderColor: "#00e0ff",
+          borderWidth: 1,
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            label: function (ctx) {
+              const i = ctx.dataIndex;
+              const price = chart.data.datasets[0].data[i];
+              const ph = computePLHistory(currentCoin);
+              const plVal = ph.pl[i];
+              if (!price || !plVal) return "";
+              const dev = (price / plVal - 1) * 100;
+              const logP = Math.log(price) / Math.LN10;
+              const logPL = Math.log(plVal) / Math.LN10;
+              const z = (logP - logPL) / models[currentCoin].sigma;
+              return [
+                "Prezzo: " + fmt(price, 4),
+                "PL: " + fmt(plVal, 4),
+                "Dev%: " + fmt(dev, 2) + "%",
+                "Z: " + fmt(z, 3)
+              ];
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function updateChart(sym){
+  const status = document.getElementById("status");
+  status.textContent = "Aggiornamento grafico...";
+  status.className = "";
+
+  const series = fullHistory[sym] || [];
+  const labels = series.map(pt => new Date(pt.time).toLocaleDateString());
+  const prices = series.map(pt => pt.close);
+  const ph = computePLHistory(sym);
+
+  chart.data.labels = labels;
+  chart.data.datasets[0].data = prices;
+  chart.data.datasets[1].data = ph.pl;
+  chart.data.datasets[4].data = ph.plus1;
+  chart.data.datasets[5].data = ph.plus2;
+  chart.data.datasets[6].data = ph.minus1;
+  chart.data.datasets[7].data = ph.minus2;
+
+let above = [];
+let below = [];
+
+for (let i = 0; i < prices.length; i++) {
+  const p  = prices[i];
+  const fv = ph.pl[i];
+
+  if (p > fv) {
+    // PREZZO SOPRA PL → coloriamo area verde tra PREZZO e PL
+    above.push(p);   // linea superiore = prezzo
+    below.push(null);
+  } else if (p < fv) {
+    // PREZZO SOTTO PL → coloriamo area rossa tra PREZZO e PL
+    above.push(null);
+    below.push(p);   // linea inferiore = prezzo
+  } else {
+    // prezzo esattamente sulla PL → nessuna area
+    above.push(null);
+    below.push(null);
+  }
+}
+
+// dataset[2] = Area sopra PL, dataset[3] = Area sotto PL
+chart.data.datasets[2].data = above;
+chart.data.datasets[3].data = below;
+
+
+  chart.update();
+  status.textContent = "Grafico aggiornato";
+  status.className = "ok";
+}
+
+// === RADAR (linee dritte + fill trasparente) ===
+
+function createRadarChart() {
+  const ctx = document.getElementById("radarChart").getContext("2d");
+
+  radarChart = new Chart(ctx, {
+    type: "radar",
+    data: {
+      labels: ["Dev%", "Z-score", "Opportunità", "Ciclo", "Valutazione"],
+      datasets: [{
+        label: "Profilo attuale",
+        data: [50, 50, 50, 50, 50],
+        pointRadius: 4,
+        pointBackgroundColor: "#fbbf24",
+        borderWidth: 2,
+        fill: true,
+        backgroundColor: "rgba(251,191,36,0.20)",  
+        borderColor: "#fbbf24",
+        tension: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        r: {
+          min: 0,
+          max: 100,
+          ticks: { display: false },
+          grid: { color: "rgba(255,255,255,0.12)" },
+          angleLines: { color: "rgba(255,255,255,0.14)" },
+          pointLabels: {
+            color: "#e5e7eb",
+            font: { size: 15, weight: "600" }
+          }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          backgroundColor: "rgba(0,0,0,0.85)",
+          borderColor: "#fbbf24",
+          borderWidth: 1,
+          padding: 8,
+          callbacks: {
+            label: function (ctx) {
+              const i = ctx.dataIndex;
+              const names = ["Dev%", "Z-score", "Opportunità", "Ciclo", "Valutazione"];
+              const real = radarRealValues;
+
+              if (i === 0) return `Dev%: ${real[0].toFixed(2)}%`;
+              if (i === 1) return `Z-score: ${real[1].toFixed(3)}`;
+              if (i === 2) return `Opportunità: ${real[2].toFixed(0)}/100`;
+              if (i === 3) return `Ciclo: ${real[3]}`;
+              if (i === 4) return `Valutazione: ${real[4]}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function updateRadarChart(dev, z, score) {
+  if (!radarChart) return;
+
+  // clamp
+  const devClamped   = Math.max(-80, Math.min(80, dev));
+  const zClamped     = Math.max(-3, Math.min(3, z));
+  const scoreClamped = Math.max(0, Math.min(100, score));
+
+  // ----------------- NORMALIZZAZIONE (solo per la grafica) -----------------
+
+  // Dev%: convertiamo -80..+80 → 0..100 (cheap = alto)
+  const devAxis = (-devClamped + 80) / 160 * 100;
+
+  // Z-score: -3..+3 → 0..100 (cheap = alto)
+  const zAxis = (-zClamped + 3) / 6 * 100;
+
+  // Opportunità reale 0..100
+  const oppAxis = scoreClamped;
+
+  // Ciclo (più siamo in euforia, più scende)
+  const cycleAxis = 10 + ((-zClamped + 3) / 6) * 80;
+
+  // Valutazione = “quanto il prezzo è vicino alla PL”
+  const valAxis = 100 - (Math.abs(devClamped) / 80) * 100;
+
+  // ----------------- ETICHETTE REALI -----------------
+
+  let cycleLabel =
+    z <= -2 ? "Panic / Accumulo" :
+    z <= -1 ? "Cheap" :
+    z <=  1 ? "Neutro" :
+    z <=  2 ? "Hot" :
+              "Euforia";
+
+  let valLabel =
+    dev <= -40 ? "Molto economico" :
+    dev <= -15 ? "Economico" :
+    dev <=  10 ? "Neutro" :
+    dev <=  35 ? "Caro" :
+                 "Molto caro";
+
+  // Salviamo VERO radar (tooltip)
+  radarRealValues = [
+    dev,        
+    z,          
+    scoreClamped, 
+    cycleLabel,
+    valLabel
+  ];
+
+  // ----------------- COLORI DINAMICI -----------------
+
+  let color =
+    scoreClamped >= 80 ? "#22c55e" :
+    scoreClamped >= 60 ? "#4ade80" :
+    scoreClamped >= 40 ? "#60a5fa" :
+    scoreClamped >= 20 ? "#f59e0b" :
+                         "#ef4444";
+
+  // ----------------- AGGIORNAMENTO GRAFICO -----------------
+
+  radarChart.data.datasets[0].data = [
+    devAxis, zAxis, oppAxis, cycleAxis, valAxis
+  ];
+
+  radarChart.data.datasets[0].borderColor          = color;
+  radarChart.data.datasets[0].backgroundColor      = hexToRgba(color, 0.18);
+  radarChart.data.datasets[0].pointBackgroundColor = color;
+
+  radarChart.update("none");
+}
+// ===============================
+// 🔥 BUBBLE INDICATOR + MINI ANALISI
+// ===============================
+function updateBubbleAndMini(dev, z, score, coin) {
+  const bubble = document.getElementById("bubble-indicator");
+  const mini   = document.getElementById("mini-analysis");
+
+  let label, bg, col;
+
+  if (score >= 70 && dev < 0 && z < 0) {
+    label = "BUY ZONE ✓";
+    bg = "rgba(34,197,94,0.20)";
+    col = "#22c55e";
+  } else if (score <= 30 && dev > 0 && z > 0) {
+    label = "RISK ZONE ⚠";
+    bg = "rgba(248,113,113,0.25)";
+    col = "#f97373";
+  } else {
+    label = "NEUTRAL •";
+    bg = "rgba(250,204,21,0.20)";
+    col = "#eab308";
+  }
+
+  bubble.style.display = "inline-block";
+  bubble.style.background = bg;
+  bubble.style.color = col;
+  bubble.textContent = label;
+
+  const devWord = dev >= 0 ? "sopra" : "sotto";
+  const devColor = dev >= 0 ? "#f97316" : "#22c55e";
+
+  let zone =
+    score >= 70 ? "zona storicamente favorevole"
+    : score <= 30 ? "zona più rischiosa"
+    : "zona neutrale";
+
+  mini.innerHTML = `
+    <span style="color:#e5e7eb;">${coin}</span> è
+    <span style="color:${devColor};">${devWord}</span>
+    la Power Law di <b>${dev.toFixed(2)}%</b>.<br>
+    Z-score: <b>${z.toFixed(2)}</b>,
+    Opportunità: <b>${score.toFixed(0)}/100</b> → ${zone}.
+  `;
+}
+function updateRiskBar(score){
+    const pointer = document.getElementById("risk-bar-pointer");
+    if(!pointer) return;
+
+    // score 0–100 → posizione %
+    const pos = Math.max(0, Math.min(100, score));
+    
+    pointer.style.left = pos + "%";
+}
+
+// === GAUGE RISK/OPPORTUNITY ===
+
+function computeOpportunityScore(dev,z){
+  let score = 50;
+  score += -dev * 0.6;
+  score += -z   * 18;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function updateGaugeForCoin(sym, dev, z){
+  const score   = computeOpportunityScore(dev,z);
+  const titleEl = document.getElementById("gauge-title");
+  const numEl   = document.getElementById("gauge-score-number");
+  const lblEl   = document.getElementById("gauge-score-label");
+
+  let color =
+    score >= 80 ? "#00ff95" :
+    score >= 60 ? "#4ade80" :
+    score >= 40 ? "#60a5fa" :
+    score >= 20 ? "#f59e0b" :
+                  "#ef4444";
+
+  const glow = currentTheme === "dark" ? `0 0 20px ${color}88` : "none";
+
+  let current = parseInt(numEl.textContent) || 0;
+  let target  = score;
+  let step    = (target - current)/20;
+  let i = 0;
+  function anim(){
+    current += step;
+    i++;
+    if(i >= 20) numEl.textContent = target;
+    else{
+      numEl.textContent = Math.round(current);
+      requestAnimationFrame(anim);
+    }
+  }
+  anim();
+
+  let label;
+  if(score >= 80)      label = "Opportunità eccezionale";
+  else if(score >= 60) label = "Buona opportunità";
+  else if(score >= 40) label = "Neutro";
+  else if(score >= 20) label = "Rischioso";
+  else                 label = "Estremamente rischioso";
+
+  titleEl.textContent = "Rischio / Opportunità — " + sym;
+  numEl.style.color   = color;
+  lblEl.textContent   = label;
+  lblEl.style.color   = color;
+  document.querySelector(".gauge-box").style.boxShadow = glow;
+  return score;
+}
+
+// === TABELLA RADAR + TARGET FUTURI ===
+
+function buildRadarTable(){
+  let html = "";
+  coins.forEach(sym=>{
+    html += `
+      <tr>
+        <td>${sym}</td>
+        <td id="p-${sym}">-</td>
+        <td id="pl-${sym}">-</td>
+        <td id="dev-${sym}">-</td>
+        <td id="z-${sym}">-</td>
+        <td id="zone-${sym}">-</td>
+      </tr>`;
+  });
+  document.getElementById("table-body").innerHTML = html;
+}
+
+function buildTargets(){
+  let body = document.getElementById("targets-body");
+  let html = "";
+  years.forEach(yr=>{
+    coins.forEach(sym=>{
+      const m  = models[sym];
+      const t  = daysBetween(m.start, new Date(yr,0,1));
+      const fv = m.c * Math.pow(t, m.a);
+      const logF = Math.log(fv)/Math.LN10;
+      const minus2 = Math.pow(10, logF - 2*m.sigma);
+      const minus1 = Math.pow(10, logF - 1*m.sigma);
+      const plus1  = Math.pow(10, logF + 1*m.sigma);
+      const plus2  = Math.pow(10, logF + 2*m.sigma);
+      html += `
+        <tr>
+          <td>${sym}</td>
+          <td>${yr}</td>
+          <td>${fmt(minus2,4)}</td>
+          <td>${fmt(minus1,4)}</td>
+          <td>${fmt(fv,4)}</td>
+          <td>${fmt(plus1,4)}</td>
+          <td>${fmt(plus2,4)}</td>
+        </tr>`;
+    });
+  });
+  body.innerHTML = html;
+}
+
+// === UPDATE RADAR COMPLETO ===
+
+function updateRadar(){
+  const now = new Date();
+  let worstDev = 0;
+  let worstCoin = "";
+
+  coins.forEach(sym=>{
+    const price = latestPrices[sym];
+    const rowP    = document.getElementById("p-"+sym);
+    const rowPL   = document.getElementById("pl-"+sym);
+    const rowDev  = document.getElementById("dev-"+sym);
+    const rowZ    = document.getElementById("z-"+sym);
+    const rowZone = document.getElementById("zone-"+sym);
+
+    if(!price){
+      rowP.textContent="-";
+      rowPL.textContent="-";
+      rowDev.textContent="-";
+      rowZ.textContent="-";
+      rowZone.textContent="-";
+      return;
+    }
+
+    const m  = models[sym];
+    const t  = daysBetween(m.start, now);
+    const fv = m.c * Math.pow(t, m.a);
+
+    const logP = Math.log(price)/Math.LN10;
+    const logF = Math.log(fv)/Math.LN10;
+    const z    = (logP-logF)/m.sigma;
+    const dev  = (price/fv -1)*100;
+
+    rowP.textContent   = fmt(price,4);
+    rowPL.textContent  = fmt(fv,4);
+    rowDev.textContent = fmt(dev,1)+"%";
+    rowDev.className   = devClass(dev);
+    rowZ.textContent   = fmt(z,2);
+
+    const zone = zona(z);
+    rowZone.textContent = zone.t;
+    rowZone.className   = zone.c;
+
+    if(dev < worstDev){
+      worstDev = dev;
+      worstCoin = sym;
+    }
+
+    if(sym === currentCoin){
+      const score = updateGaugeForCoin(sym, dev, z);
+      updateRadarChart(dev, z, score);
+	if (!isNaN(dev) && !isNaN(z) && !isNaN(score)) {
+    updateBubbleAndMini(dev, z, score, currentCoin);
+}
+
+	  updateRiskBar(score);
+    }
+  });
+
+  const mv = document.getElementById("most-undervalued");
+  if(worstCoin){
+    mv.innerHTML = `La più sottovalutata ora è: <b>${worstCoin}</b> (${worstDev.toFixed(1)}%)`;
+    mv.style.color = worstDev < -30 ? "#00ff95" :
+                     worstDev < -15 ? "#4ade80" :
+                     "#e5e7eb";
+  }
+}
+
+// === FETCH BINANCE ===
+
+async function fetchFullHistory(sym){
+  const symbol = BINANCE[sym];
+  let endTime = Date.now();
+  const limit = 1000;
+  let all = [];
+
+  while(true){
+    const url =
+      "https://api.binance.com/api/v3/klines?symbol="+symbol+
+      "&interval=1d&limit="+limit+"&endTime="+endTime;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if(!data.length) break;
+    all = data.concat(all);
+    if(data.length < limit) break;
+    endTime = data[0][0] - 1;
+  }
+  fullHistory[sym] = all.map(d => ({ time:d[0], close:parseFloat(d[4]) }));
+}
+
+async function fetchLivePrices(){
+  const syms = coins.map(c=>BINANCE[c]);
+  const url  = "https://api.binance.com/api/v3/ticker/price?symbols="+encodeURIComponent(JSON.stringify(syms));
+  const res  = await fetch(url);
+  if(!res.ok) return;
+  const data = await res.json();
+  data.forEach(it=>{
+    for(let c in BINANCE){
+      if(BINANCE[c] === it.symbol){
+        latestPrices[c] = parseFloat(it.price);
+      }
+    }
+  });
+  updateRadar();
+}
+// === HANDLERS & INIT ===
+
+async function changeCoin(){
+  const sel = document.getElementById("coin-select");
+  currentCoin = sel.value;
+  if(!fullHistory[currentCoin]) await fetchFullHistory(currentCoin);
+  updateChart(currentCoin);
+  updateRadar();
+}
+
+async function init(){
+  buildRadarTable();
+  buildTargets();
+  createChart();
+  createRadarChart();
+  applyTheme("dark");
+
+  // storico iniziale BTC
+  await fetchFullHistory("BTC");
+  updateChart("BTC");
+
+  // prezzi live
+  await fetchLivePrices();
+  setInterval(fetchLivePrices, 60000);
+}
+
+window.onload = init;
+
+    </script>
+  </div>
+</body>
+</html>
